@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Complete Python Roadmap</title>
+<style>
+:root{
+  --bg:#f6f7f9;--panel:#ffffff;--ink:#1b2430;--muted:#5d6b7c;--line:#e1e5ea;
+  --accent:#2f6fb5;--accent-soft:#e7f0fa;--yellow:#f2c230;--good:#2e8b57;
+  --code-bg:#0f1720;--code-ink:#e3e9f0;--kw:#7fb4f5;--str:#a5d6a0;--com:#7d8a99;--num:#f0b77a;
+  --use:#fff7df;--use-line:#eed48a;--hist:#eef3f1;--hist-line:#b9d2c6;
+}
+:root[data-theme="dark"]{
+  --bg:#11161c;--panel:#1a212a;--ink:#e6ebf1;--muted:#98a5b4;--line:#2b3542;
+  --accent:#6aa9ea;--accent-soft:#1f3044;--good:#5fc08a;
+  --code-bg:#0b1016;--use:#2a2515;--use-line:#5c4f1f;--hist:#18241f;--hist-line:#2f4a3e;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#11161c;--panel:#1a212a;--ink:#e6ebf1;--muted:#98a5b4;--line:#2b3542;
+    --accent:#6aa9ea;--accent-soft:#1f3044;--good:#5fc08a;
+    --code-bg:#0b1016;--use:#2a2515;--use-line:#5c4f1f;--hist:#18241f;--hist-line:#2f4a3e;
+  }
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 "Segoe UI",system-ui,-apple-system,Roboto,sans-serif}
+button,input{font:inherit;color:inherit}
+.layout{display:grid;grid-template-columns:290px minmax(0,1fr);min-height:100vh}
+aside{background:var(--panel);border-right:1px solid var(--line);padding:20px 14px;position:sticky;top:0;height:100vh;overflow-y:auto}
+.brand{display:flex;align-items:center;gap:10px;padding:0 8px 14px;cursor:pointer}
+.brand .logo{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--accent) 50%,var(--yellow) 50%);flex:none}
+.brand b{font-size:17px;line-height:1.2}
+.brand small{display:block;color:var(--muted);font-weight:400;font-size:12px}
+.search{width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:9px;background:var(--bg);margin-bottom:12px}
+.search:focus{outline:2px solid var(--accent);outline-offset:1px}
+nav button{display:block;width:100%;text-align:left;background:none;border:0;border-radius:9px;padding:9px 10px;cursor:pointer;margin-bottom:2px}
+nav button:hover{background:var(--bg)}
+nav button.on{background:var(--accent-soft)}
+nav .row{display:flex;gap:9px;align-items:baseline}
+nav .num{font-size:12px;font-weight:700;color:var(--accent);flex:none;width:18px;font-variant-numeric:tabular-nums}
+nav .name{font-weight:600;font-size:14.5px;flex:1}
+nav .cnt{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.bar{height:4px;background:var(--line);border-radius:4px;margin:6px 0 0 27px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--good);width:0;transition:width .25s}
+.side-foot{margin-top:14px;padding:12px 10px 0;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--muted)}
+.ghost{background:none;border:1px solid var(--line);border-radius:8px;padding:5px 11px;cursor:pointer;font-size:13px}
+.ghost:hover{border-color:var(--accent);color:var(--accent)}
+main{padding:34px clamp(16px,4vw,52px) 80px;max-width:980px;width:100%}
+h1{font-size:clamp(26px,4vw,36px);line-height:1.15;margin:0 0 8px;text-wrap:balance}
+h2{font-size:21px;margin:38px 0 12px}
+.eyebrow{font-size:12.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--accent)}
+.lead{color:var(--muted);font-size:17px;max-width:68ch;margin:0 0 20px}
+.tools{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 18px}
+details.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;margin-bottom:12px}
+details.card.done{border-color:var(--good)}
+summary{list-style:none;display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer}
+summary::-webkit-details-marker{display:none}
+summary input{width:18px;height:18px;accent-color:var(--good);flex:none;cursor:pointer}
+summary .idx{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;flex:none}
+summary h3{margin:0;font-size:17px;flex:1}
+summary .chev{color:var(--muted);transition:transform .2s;flex:none}
+details[open] summary .chev{transform:rotate(90deg)}
+.body{padding:0 16px 16px}
+.lbl{font-size:11.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:14px 0 4px}
+.body p{margin:0;max-width:72ch}
+.box{border-left:3px solid;border-radius:0 8px 8px 0;padding:10px 14px}
+.box.use{background:var(--use);border-color:var(--use-line)}
+.box.hist{background:var(--hist);border-color:var(--hist-line);font-size:15px}
+.box.tip{background:var(--accent-soft);border-color:var(--accent);font-size:15px}
+pre{background:var(--code-bg);color:var(--code-ink);border-radius:9px;padding:14px 16px;overflow-x:auto;margin:0;font:13.5px/1.55 Consolas,"Cascadia Code",Menlo,monospace;tab-size:4}
+.kw{color:var(--kw)}.st{color:var(--str)}.cm{color:var(--com);font-style:italic}.nu{color:var(--num)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.pcard{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;cursor:pointer;text-align:left}
+.pcard:hover{border-color:var(--accent)}
+.pcard b{display:block;font-size:16px;margin:2px 0 4px}
+.pcard span{color:var(--muted);font-size:14px}
+.timeline{border-left:2px solid var(--line);margin-left:6px;padding-left:20px}
+.timeline div{position:relative;padding-bottom:14px}
+.timeline div::before{content:"";position:absolute;left:-27px;top:8px;width:12px;height:12px;border-radius:50%;background:var(--yellow);border:2px solid var(--panel)}
+.timeline b{color:var(--accent);font-variant-numeric:tabular-nums;margin-right:8px}
+.body p + p{margin-top:10px}
+.body ul{margin:0;padding-left:20px;max-width:72ch}
+.body li{margin-bottom:4px}
+.links a{color:var(--accent);word-break:break-word}
+.track{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);padding:14px 10px 6px}
+details.qa{border:1px solid var(--line);border-radius:8px;margin-bottom:6px;background:var(--bg)}
+details.qa summary{padding:9px 12px;font-weight:600;font-size:15px;display:block;cursor:pointer}
+details.qa summary::before{content:"Q. ";color:var(--accent)}
+details.qa[open] summary{border-bottom:1px solid var(--line)}
+details.qa .ans{padding:10px 12px}
+details.qa .ans pre{margin-top:8px}
+.box.proj{background:var(--accent-soft);border-color:var(--good)}
+.empty{color:var(--muted);padding:30px 0}
+.from{font-size:12px;color:var(--accent);font-weight:600}
+@media (max-width:820px){
+  .layout{display:block}
+  aside{position:static;height:auto;border-right:0;border-bottom:1px solid var(--line);padding:14px 16px}
+  nav{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px}
+  nav button{width:auto;flex:none;border:1px solid var(--line);margin:0}
+  nav .name{white-space:nowrap}
+  nav .cnt,.bar,.track{display:none}
+  main{padding-top:22px}
+}
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside>
+    <div class="brand" id="home"><span class="logo"></span><b>Python Roadmap<small>Python, DevOps, SQL, design, cloud, frontend</small></b></div>
+    <input class="search" id="q" type="search" placeholder="Search topics… (e.g. decorator)" aria-label="Search topics">
+    <nav id="nav"></nav>
+    <div class="side-foot"><span id="total"></span><button class="ghost" id="theme">Theme</button></div>
+  </aside>
+  <main id="main"></main>
+</div>
+
+<script>
+window.ROADMAP = [];
+function T(t, d, u, c, h, n){ return {t:t, d:d, u:u, c:(c||"").replace(/^\n+|\s+$/g,""), h:h, n:n||""}; }
+// X = extended topic: d is a list of paragraphs, k a list of key points, l a list of [label, url] official links
+// EXTRA = deep explanation, tricky interview questions and project tricks for one topic, matched by phase number and exact title
+window.EXTRAS = {};
+function EXTRA(n, title, o){ if (o.iq) o.iq.forEach(function(x){ if (x.c) x.c = x.c.replace(/^\n+|\s+$/g, ""); }); window.EXTRAS[n + "|" + title] = o; }
+function X(t, d, k, u, c, h, l){ var o = T(t, d, u, c, h); o.k = k || []; o.l = l || []; return o; }
+</script>
+<script src="data1.js"></script>
+<script src="data2.js"></script>
+<script src="data3.js"></script>
+<script src="data4.js"></script>
+<script src="data5.js"></script>
+<script src="data6.js"></script>
+<script src="data7.js"></script>
+<script src="data8.js"></script>
+<script src="data9.js"></script>
+<script src="data10.js"></script>
+<script src="data11.js"></script>
+<script src="deep01.js"></script>
+<script src="deep02.js"></script>
+<script src="deep03.js"></script>
+<script src="deep04.js"></script>
+<script src="deep05.js"></script>
+<script src="deep06.js"></script>
+<script src="deep07.js"></script>
+<script src="deep08.js"></script>
+<script src="deep09.js"></script>
+<script src="deep10.js"></script>
+<script src="deep11.js"></script>
+<script src="deep12.js"></script>
+<script src="deep13.js"></script>
+<script src="deep14.js"></script>
+<script src="deep15.js"></script>
+<script src="deep16.js"></script>
+<script src="deep17.js"></script>
+<script src="deep18.js"></script>
+<script src="deep19.js"></script>
+<script src="deep20.js"></script>
+<script src="deep21.js"></script>
+<script>
+(function(){
+  var R = window.ROADMAP, main = document.getElementById("main"), nav = document.getElementById("nav");
+  var view = "home", query = "";
+
+  var TIMELINE = [
+    ["1989","Guido van Rossum starts writing Python over the Christmas holidays at CWI in Amsterdam, as a successor to the ABC teaching language. The name comes from Monty Python's Flying Circus."],
+    ["1991","Python 0.9.0 is published. It already has functions, exceptions, modules, and the core types list, dict and str."],
+    ["1994","Python 1.0 ships with lambda, map, filter and reduce."],
+    ["2000","Python 2.0 adds list comprehensions and a garbage collector that can clean up reference cycles."],
+    ["2001","The Python Software Foundation is created. Python 2.2 unifies types and classes, bringing generators, descriptors and properties."],
+    ["2008","Python 3.0 is released. It deliberately breaks backward compatibility to fix old design mistakes: text is Unicode, print becomes a function."],
+    ["2014","Python 3.4 adds asyncio, enum and pathlib, and bundles pip."],
+    ["2015","Python 3.5 introduces async / await and type hints."],
+    ["2018","Guido steps down as 'Benevolent Dictator For Life'. A five-person Steering Council now leads the language."],
+    ["2020","Python 2 reaches end of life on 1 January. The world is on Python 3."],
+    ["2022","Python 3.11 is 10-60% faster than 3.10 thanks to the Faster CPython project."],
+    ["2024","Python 3.13 ships an experimental build without the GIL and an experimental JIT compiler."],
+    ["2025","Python 3.14 makes the free-threaded (no-GIL) build officially supported and adds template strings."]
+  ];
+
+  // ---------- progress (saved in this browser only) ----------
+  var done = {};
+  try { done = JSON.parse(localStorage.getItem("pyroadmap-done") || "{}") || {}; } catch(e){ done = {}; }
+  function save(){ try { localStorage.setItem("pyroadmap-done", JSON.stringify(done)); } catch(e){} }
+  function key(p, i){ return p.n + ":" + i; }
+  function countDone(p){ var c = 0; p.topics.forEach(function(_, i){ if (done[key(p,i)]) c++; }); return c; }
+
+  // ---------- helpers ----------
+  function esc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+  var KW = "False|None|True|and|as|assert|async|await|break|class|continue|def|del|elif|else|except|finally|for|from|global|if|import|in|is|lambda|nonlocal|not|or|pass|raise|return|try|while|with|yield|match|case";
+  var HL = new RegExp("(#.*$)|(\"\"\"[\\s\\S]*?\"\"\"|'[^'\\n]*'|\"[^\"\\n]*\")|\\b(" + KW + ")\\b|\\b(\\d+(?:\\.\\d+)?)\\b", "gm");
+  function highlight(code){
+    var out = "", last = 0, m;
+    HL.lastIndex = 0;
+    while ((m = HL.exec(code))) {
+      out += esc(code.slice(last, m.index));
+      var cls = m[1] ? "cm" : m[2] ? "st" : m[3] ? "kw" : "nu";
+      out += '<span class="' + cls + '">' + esc(m[0]) + "</span>";
+      last = m.index + m[0].length;
+    }
+    return out + esc(code.slice(last));
+  }
+
+  function text(t){ return Array.isArray(t.d) ? t.d.join(" ") + " " + (t.k || []).join(" ") : t.d; }
+  function explain(t){
+    if (!Array.isArray(t.d)) return '<div class="lbl">Definition</div><p>' + esc(t.d) + "</p>";
+    var h = '<div class="lbl">Explanation</div>';
+    t.d.forEach(function(p){ h += "<p>" + esc(p) + "</p>"; });
+    if (t.k && t.k.length) {
+      h += '<div class="lbl">Key points</div><ul>';
+      t.k.forEach(function(k){ h += "<li>" + esc(k) + "</li>"; });
+      h += "</ul>";
+    }
+    return h;
+  }
+
+  function deep(ex){
+    if (!ex.deep || !ex.deep.length) return "";
+    var h = '<div class="lbl">Deep explanation</div>';
+    ex.deep.forEach(function(p){ h += "<p>" + esc(p) + "</p>"; });
+    return h;
+  }
+
+  function card(p, i, showFrom){
+    var t = p.topics[i], k = key(p, i), ex = window.EXTRAS[p.n + "|" + t.t] || {};
+    var h = '<details class="card' + (done[k] ? " done" : "") + '" open>' +
+      '<summary><input type="checkbox" data-k="' + k + '"' + (done[k] ? " checked" : "") + ' title="Mark as learned" aria-label="Mark as learned">' +
+      '<span class="idx">' + p.n + "." + (i + 1) + "</span><h3>" + esc(t.t) + "</h3>" +
+      (showFrom ? '<span class="from">Phase ' + p.n + "</span>" : "") + '<span class="chev">&#9656;</span></summary>' +
+      '<div class="body">' + explain(t) + deep(ex) +
+      '<div class="lbl">Real-world use case</div><div class="box use"><p>' + esc(t.u) + "</p></div>";
+    if (t.c) h += '<div class="lbl">Example</div><pre><code>' + highlight(t.c) + "</code></pre>";
+    if (t.n) h += '<div class="lbl">Interview explanation</div><div class="box tip"><p>' + esc(t.n) + "</p></div>";
+    if (ex.iq && ex.iq.length) {
+      h += '<div class="lbl">Tricky interview questions (click to see the answer)</div>';
+      ex.iq.forEach(function(x){
+        h += '<details class="qa"><summary>' + esc(x.q) + '</summary><div class="ans"><p>' + esc(x.a) + "</p>" +
+          (x.c ? "<pre><code>" + highlight(x.c) + "</code></pre>" : "") + "</div></details>";
+      });
+    }
+    if (ex.tips && ex.tips.length) {
+      h += '<div class="lbl">Project tricks</div><div class="box proj"><ul>';
+      ex.tips.forEach(function(x){ h += "<li>" + esc(x) + "</li>"; });
+      h += "</ul></div>";
+    }
+    h += '<div class="lbl">History</div><div class="box hist"><p>' + esc(t.h) + "</p></div>";
+    if (t.l && t.l.length) {
+      h += '<div class="lbl">Official links</div><ul class="links">';
+      t.l.forEach(function(x){ h += '<li><a href="' + x[1] + '" target="_blank" rel="noopener">' + esc(x[0]) + "</a></li>"; });
+      h += "</ul>";
+    }
+    h += "</div></details>";
+    return h;
+  }
+
+  // ---------- views ----------
+  function renderNav(){
+    var all = 0, got = 0, h = "", track = "";
+    R.forEach(function(p){
+      var c = countDone(p); all += p.topics.length; got += c;
+      if (p.track && p.track !== track) { track = p.track; h += '<div class="track">' + esc(track) + "</div>"; }
+      h += '<button data-p="' + p.n + '" class="' + (view === p.n && !query ? "on" : "") + '"><span class="row"><span class="num">' + p.n +
+        '</span><span class="name">' + esc(p.title) + '</span><span class="cnt">' + c + "/" + p.topics.length + "</span></span>" +
+        '<div class="bar"><i style="width:' + (100 * c / p.topics.length) + '%"></i></div></button>';
+    });
+    nav.innerHTML = h;
+    document.getElementById("total").textContent = got + " of " + all + " learned";
+  }
+
+  function renderHome(){
+    var h = '<div class="eyebrow">Complete roadmap</div><h1>Learn Python, DevOps, SQL, system design, cloud, TypeScript and React</h1>' +
+      '<p class="lead">' + R.length + ' phases, in order. Every topic has a plain definition, a deep explanation, a real-world use case, an example, tricky interview questions, project tricks and its history. Tick a topic when you understand it — your progress is saved in this browser.</p>' +
+      '<h2>All phases</h2><div class="grid">';
+    R.forEach(function(p){
+      h += '<button class="pcard" data-p="' + p.n + '"><span class="eyebrow">Phase ' + p.n + " · " + p.topics.length + " topics</span><b>" + esc(p.title) + "</b><span>" + esc(p.blurb) + "</span></button>";
+    });
+    h += '</div><h2>A short history of Python</h2><div class="timeline">';
+    TIMELINE.forEach(function(e){ h += "<div><b>" + e[0] + "</b>" + esc(e[1]) + "</div>"; });
+    h += '</div><h2>How to study each topic</h2><p class="lead">Read the definition, then the use case so you know why it matters. Type the example yourself instead of copying it, change one thing, and predict the output before you run it. If you can explain the topic aloud in two sentences, tick it and move on.</p>';
+    main.innerHTML = h;
+  }
+
+  function renderPhase(n){
+    var p = R.filter(function(x){ return x.n === n; })[0];
+    var h = '<div class="eyebrow">Phase ' + p.n + " of " + R.length + "</div><h1>" + esc(p.title) + '</h1><p class="lead">' + esc(p.blurb) + "</p>" +
+      '<div class="tools"><button class="ghost" id="exp">Expand all</button><button class="ghost" id="col">Collapse all</button>';
+    if (p.n > 1) h += '<button class="ghost" data-p="' + (p.n - 1) + '">&larr; Phase ' + (p.n - 1) + "</button>";
+    if (p.n < R.length) h += '<button class="ghost" data-p="' + (p.n + 1) + '">Phase ' + (p.n + 1) + " &rarr;</button>";
+    h += "</div>";
+    p.topics.forEach(function(_, i){ h += card(p, i, false); });
+    main.innerHTML = h;
+  }
+
+  function renderSearch(){
+    var q = query.toLowerCase(), h = "", n = 0;
+    R.forEach(function(p){
+      p.topics.forEach(function(t, i){
+        var ex = window.EXTRAS[p.n + "|" + t.t] || {};
+        var more = (ex.deep || []).join(" ") + " " + (ex.iq || []).map(function(x){ return x.q + " " + x.a; }).join(" ") + " " + (ex.tips || []).join(" ");
+        if ((t.t + " " + text(t) + " " + t.u + " " + more).toLowerCase().indexOf(q) !== -1) { h += card(p, i, true); n++; }
+      });
+    });
+    main.innerHTML = '<div class="eyebrow">Search</div><h1>' + n + " result" + (n === 1 ? "" : "s") + ' for "' + esc(query) + '"</h1>' +
+      (n ? h : '<p class="empty">Nothing matched. Try a shorter word, like "async" or "list".</p>');
+  }
+
+  function render(){
+    if (query) renderSearch(); else if (view === "home") renderHome(); else renderPhase(view);
+    renderNav();
+  }
+  function go(v){ view = v; query = ""; document.getElementById("q").value = ""; render(); window.scrollTo(0, 0); try { location.hash = v === "home" ? "" : "phase-" + v; } catch(e){} }
+
+  // ---------- events ----------
+  document.addEventListener("click", function(e){
+    var b = e.target.closest("[data-p]");
+    if (b) { go(parseInt(b.getAttribute("data-p"), 10)); return; }
+    if (e.target.closest("#home")) { go("home"); return; }
+    if (e.target.id === "exp" || e.target.id === "col") {
+      var open = e.target.id === "exp";
+      main.querySelectorAll("details.card").forEach(function(d){ d.open = open; });
+    }
+  });
+  main.addEventListener("change", function(e){
+    var k = e.target.getAttribute && e.target.getAttribute("data-k");
+    if (!k) return;
+    if (e.target.checked) done[k] = 1; else delete done[k];
+    e.target.closest("details").classList.toggle("done", e.target.checked);
+    save(); renderNav();
+  });
+  document.getElementById("q").addEventListener("input", function(e){ query = e.target.value.trim(); render(); });
+  document.getElementById("theme").addEventListener("click", function(){
+    var root = document.documentElement, cur = root.getAttribute("data-theme");
+    if (!cur) cur = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    var next = cur === "dark" ? "light" : "dark";
+    root.setAttribute("data-theme", next);
+    try { localStorage.setItem("pyroadmap-theme", next); } catch(e){}
+  });
+  try { var th = localStorage.getItem("pyroadmap-theme"); if (th) document.documentElement.setAttribute("data-theme", th); } catch(e){}
+
+  var m = /^#phase-(\d+)$/.exec(location.hash);
+  if (m && R.some(function(p){ return p.n === +m[1]; })) view = +m[1];
+  render();
+})();
+</script>
+</body>
+</html>
