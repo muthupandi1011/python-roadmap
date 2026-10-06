@@ -241,4 +241,313 @@ REST_FRAMEWORK = {
 [["Django: writing your own middleware", "https://docs.djangoproject.com/en/5.2/topics/http/middleware/#writing-your-own-middleware"],
  ["DRF: permissions", "https://www.django-rest-framework.org/api-guide/permissions/"],
  ["DRF: exceptions and custom exception handling", "https://www.django-rest-framework.org/api-guide/exceptions/"]]),
+
+X("Centralised exception handling and a standard error response",
+["Every service has errors: a missing order, a duplicate email, a bad request body, a crashed database call. When each team handles them alone, one API returns {error: 'not found'}, another returns {message: ..., code: 42}, a third leaks a full SQL statement in a 500 page. Clients cannot write one error handler, support staff cannot search for a stable error code, and security reviewers find stack traces in production responses.",
+ "The central design has three parts. First, a small exception hierarchy in the core package: AppError at the top, with NotFound, Conflict, Forbidden and DomainRuleViolation below it, each carrying an HTTP status, a stable machine-readable code and a human title. Domain code raises these and never imports anything from FastAPI or Django. Second, one response format for every error, following RFC 9457 Problem Details: a JSON body with type, title, status, detail and instance, plus company extensions such as request_id and a list of field errors. The content type is application/problem+json. Third, a function install_error_handlers(app) that registers handlers for AppError, request validation errors, plain HTTPException and finally Exception, so that an unexpected crash is logged with its traceback but answered with a generic 500 body that hides every internal detail.",
+ "Teams customise by adding subclasses of AppError in their own service for their own domain rules, with their own codes. They do not add new handlers. The error codes are documented in one place and the type URL points to that page, so a mobile developer can look up what payment.card_declined means. Changes to the body format are a major version of core, because every client depends on it; new optional fields are a minor version."],
+["One exception hierarchy in core; domain code raises AppError subclasses and knows nothing about HTTP.",
+ "One body shape for all errors (RFC 9457 Problem Details): type, title, status, detail, instance plus request_id and errors[].",
+ "Stable machine-readable codes such as order.not_found; messages can change, codes cannot.",
+ "Validation errors map to 422 with a list of field errors; business rule violations also map to 422 or 409, never to 500.",
+ "The last handler catches Exception, logs the traceback with the request ID and returns a generic body. Internals never leak.",
+ "FastAPI finds the handler by walking the exception class MRO, so one AppError handler covers every subclass.",
+ "Return the same shape from Django, DRF, FastAPI and even from the API gateway, so clients have one error parser."],
+"A travel company's mobile app had a 2,000-line error parsing module because each of 12 backend services spoke a different error dialect. After the platform team shipped install_error_handlers() in acme-core and gateways were configured to emit the same problem+json shape for 401 and 429, the app replaced the module with 40 lines and started showing the request_id on its error screen, which cut support ticket handling time by half.",
+`
+# acme_core/errors.py
+import logging
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+log = logging.getLogger("acme.errors")
+
+class AppError(Exception):
+    status, title, code = 500, "Internal Server Error", "internal"
+    def __init__(self, detail: str | None = None, **extra):
+        self.detail, self.extra = detail, extra
+        super().__init__(detail or self.title)
+
+class NotFound(AppError):            status, title, code = 404, "Not Found", "not_found"
+class Conflict(AppError):            status, title, code = 409, "Conflict", "conflict"
+class Forbidden(AppError):           status, title, code = 403, "Forbidden", "forbidden"
+class DomainRuleViolation(AppError): status, title, code = 422, "Unprocessable Content", "domain_rule"
+
+def problem(request: Request, status: int, title: str, detail=None, code="internal", **extra) -> JSONResponse:
+    body = {"type": f"https://errors.acme.com/{code}", "title": title, "status": status,
+            "detail": detail, "instance": request.url.path,
+            "request_id": request.headers.get("x-request-id"), **extra}
+    return JSONResponse(body, status_code=status, media_type="application/problem+json")
+
+def install_error_handlers(app: FastAPI) -> None:
+    @app.exception_handler(AppError)
+    async def on_app_error(request: Request, exc: AppError):
+        return problem(request, exc.status, exc.title, exc.detail, exc.code, **exc.extra)
+
+    @app.exception_handler(RequestValidationError)
+    async def on_validation(request: Request, exc: RequestValidationError):
+        errors = [{"field": ".".join(str(p) for p in e["loc"][1:]), "message": e["msg"]} for e in exc.errors()]
+        return problem(request, 422, "Validation Failed", code="validation", errors=errors)
+
+    @app.exception_handler(StarletteHTTPException)
+    async def on_http(request: Request, exc: StarletteHTTPException):
+        return problem(request, exc.status_code, str(exc.detail), code="http")
+
+    @app.exception_handler(Exception)
+    async def on_unexpected(request: Request, exc: Exception):
+        log.exception("unhandled error")           # full traceback goes to the logs only
+        return problem(request, 500, "Internal Server Error")   # nothing about the cause leaks
+
+# ---- a team's service: orders/service.py ----
+from acme_core.errors import NotFound, DomainRuleViolation
+
+class OrderAlreadyShipped(DomainRuleViolation):
+    code = "order.already_shipped"
+
+def cancel(order_id: int, repo) -> None:
+    order = repo.get(order_id)
+    if order is None:
+        raise NotFound(f"order {order_id} does not exist")
+    if order.shipped_at is not None:
+        raise OrderAlreadyShipped("shipped orders cannot be cancelled", order_id=order_id)
+    repo.cancel(order)
+`,
+"Problem Details for HTTP APIs was first published as RFC 7807 in March 2016 by Mark Nottingham and Erik Wilde, and was updated and replaced by RFC 9457 in July 2023. Structured exception hierarchies as a way to separate domain errors from transport errors are much older and are described in Domain-Driven Design (Eric Evans, 2003).",
+[["RFC 9457: Problem Details for HTTP APIs", "https://www.rfc-editor.org/rfc/rfc9457.html"],
+ ["FastAPI: handling errors and custom exception handlers", "https://fastapi.tiangolo.com/tutorial/handling-errors/"],
+ ["DRF: custom exception handling", "https://www.django-rest-framework.org/api-guide/exceptions/"]]),
+
+X("Centralised logging and request context",
+["Logs are the first tool during an incident. At scale they are useless unless they are machine-readable and joinable. If one service writes plain text lines, another writes JSON with a field named reqId and a third writes JSON with request_id, the log platform (Elasticsearch, Loki, Datadog, Splunk) cannot build one timeline for one user action. Developers also forget to add the request ID to every log call, so half the lines in a trace are orphans.",
+ "The core package owns logging setup completely. configure_logging(service, level) installs one JSON formatter on the root logger, writing to stdout so that Docker and Kubernetes collect it. The formatter adds fixed fields: timestamp, level, logger name, service, release, request_id, user_id, trace_id and span_id. The request-scoped values come from contextvars, which are set once per request by the shared middleware and read by a logging filter on every record. Developers do not pass the request ID around; they just call log.info('order created', extra={'order_id': 918}) and the shared fields appear automatically. Because contextvars are copied into every asyncio task and every asyncio.to_thread call, the values follow the request through await points.",
+ "Correlation across services works because every outgoing call carries the same request ID and the W3C traceparent header, and every Celery task receives the request ID in its headers and restores the contextvar before running. The log pipeline then groups by request_id or trace_id. The platform team controls the reserved field names and the format; teams are free to add any extra fields they like. Field name changes are a breaking change for dashboards, so they are rare and announced."],
+["Log JSON to stdout; the platform collects it. Never write log files inside a container.",
+ "Reserved fields come from core: ts, level, logger, service, release, request_id, user_id, trace_id, span_id, msg.",
+ "Use contextvars, not thread locals, for request context. They work with asyncio tasks and with asyncio.to_thread.",
+ "A logging.Filter on the handler copies the contextvars into every record, so no developer has to remember.",
+ "Pass extra={...} for structured fields. Do not format values into the message string; you cannot search inside a string.",
+ "Propagate request_id and traceparent to every outgoing HTTP call and every Celery task.",
+ "Silence noisy loggers (uvicorn.access, httpx) centrally and keep one access log line per request from your own middleware."],
+"During a Black Friday incident an online retailer could not tell which of 14 services was slow because each logged differently. After moving to the shared JSON format with trace_id in every line, an engineer typed one trace ID into the log tool and saw the whole path of the request in order, with timings, and found a 4-second call to a currency service in under five minutes.",
+`
+# acme_core/logging.py
+import json, logging, sys
+from contextvars import ContextVar
+from datetime import datetime, timezone
+from opentelemetry import trace
+
+request_id_var: ContextVar[str] = ContextVar("request_id", default="-")
+user_id_var: ContextVar[str] = ContextVar("user_id", default="-")
+
+class ContextFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        record.request_id = request_id_var.get()
+        record.user_id = user_id_var.get()
+        ctx = trace.get_current_span().get_span_context()
+        record.trace_id = format(ctx.trace_id, "032x") if ctx.is_valid else "-"
+        record.span_id = format(ctx.span_id, "016x") if ctx.is_valid else "-"
+        return True
+
+class JsonFormatter(logging.Formatter):
+    STANDARD = set(vars(logging.LogRecord("", 0, "", 0, "", (), None))) | {"message", "asctime"}
+    OURS = {"request_id", "user_id", "trace_id", "span_id"}
+
+    def __init__(self, service: str, release: str) -> None:
+        super().__init__()
+        self.service, self.release = service, release
+
+    def format(self, record: logging.LogRecord) -> str:
+        payload = {"ts": datetime.fromtimestamp(record.created, timezone.utc).isoformat(),
+                   "level": record.levelname, "logger": record.name, "msg": record.getMessage(),
+                   "service": self.service, "release": self.release}
+        payload.update({k: getattr(record, k) for k in self.OURS})
+        payload.update({k: v for k, v in record.__dict__.items() if k not in self.STANDARD | self.OURS})
+        if record.exc_info:
+            payload["exc"] = self.formatException(record.exc_info)
+        return json.dumps(payload, default=str)
+
+def configure_logging(service: str, release: str = "0.0.0", level: str = "INFO") -> None:
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(JsonFormatter(service, release))
+    handler.addFilter(ContextFilter())
+    root = logging.getLogger()
+    root.handlers[:] = [handler]          # idempotent: safe to call twice
+    root.setLevel(level)
+    for noisy in ("uvicorn.access", "httpx", "httpcore"):
+        logging.getLogger(noisy).setLevel("WARNING")
+
+# ---- a team's code ----
+log = logging.getLogger(__name__)
+log.info("order created", extra={"order_id": 918, "amount": "12.50", "currency": "EUR"})
+# {"ts": "2026-10-06T09:14:02.118+00:00", "level": "INFO", "logger": "orders.service", "msg": "order created",
+#  "service": "orders", "release": "2.4.1", "request_id": "7f3c9a...", "user_id": "u_42",
+#  "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736", "span_id": "00f067aa0ba902b7", "order_id": 918, ...}
+`,
+"Python's logging module was added in Python 2.3 (2003, PEP 282) and was modelled on Java's log4j. contextvars (PEP 567) arrived in Python 3.7 in 2018 to give asyncio code a safe replacement for thread-local storage. The W3C Trace Context standard became a Recommendation in February 2020.",
+[["Python: contextvars", "https://docs.python.org/3/library/contextvars.html"],
+ ["Python logging cookbook (filters, context, JSON)", "https://docs.python.org/3/howto/logging-cookbook.html"],
+ ["OpenTelemetry logs specification (correlation with traces)", "https://opentelemetry.io/docs/specs/otel/logs/"]]),
+
+X("Centralised configuration and feature flags",
+["Configuration is where small differences cause big outages. One service reads DATABASE_URL, another reads DB_URL, a third has the production password in a settings.py file. Some teams use .env files in production; some have no idea which value won when the same key was set in two places. Feature flags are even worse when done by hand: an if statement that reads os.environ at import time cannot be changed without a restart, and there is no way to turn a broken feature off for everyone in ten seconds.",
+ "The central design starts with a CoreSettings class built on pydantic-settings. It defines the fields every service has (env, release, log_level, database_url, redis_url, otel endpoint) with validated types and SecretStr for secrets. Each service subclasses it and adds its own fields. Values come from a fixed layering that pydantic-settings implements: constructor arguments win over environment variables, which win over .env files, which win over a secrets directory, which win over defaults. In production there are no .env files; the orchestrator injects environment variables from a secret manager (Vault, AWS Secrets Manager, Kubernetes Secrets). Settings are built once at startup and passed in through a dependency, so a test can construct Settings(database_url=...) directly.",
+ "Feature flags are a separate, runtime concept. The core package provides a Flags client that reads rules from a store that can change without a deploy (Redis, LaunchDarkly, Unleash or an OpenFeature provider). A rule has an on switch (the kill switch), an allow list for internal users, and a percentage for gradual rollout. The percentage is applied by hashing the flag name with the subject (user or tenant), so the same user always gets the same answer and the rollout can go 1, 10, 50, 100 percent without flapping. Flags are temporary: each one has an owner and a removal date, and a CI check warns when a flag is older than 90 days."],
+["One CoreSettings base class with typed, validated fields and SecretStr for passwords; services subclass it.",
+ "Precedence in pydantic-settings: init arguments, then environment variables, then .env files, then secrets directory, then defaults.",
+ "No .env files in production. Secrets come from a secret manager into environment variables or mounted files.",
+ "Fail fast: a missing required setting must crash at startup with a clear message, not at the first request.",
+ "Flags are evaluated at request time from a store that can change without a deploy, with a local cache of a few seconds.",
+ "Percentage rollout uses a stable hash of flag name plus subject; a kill switch is a separate boolean that wins over everything.",
+ "Every flag has an owner and an expiry. Old flags are deleted; dead code paths are removed."],
+"A fintech company rolled a new risk model out to 5 percent of users on Monday, 25 percent on Tuesday and saw a spike in false declines on Wednesday at 50 percent. The on-call engineer set the kill switch in the flag store and all 60 instances of the service switched back to the old model within the 10-second cache window, with no deploy and no rollback.",
+`
+# acme_core/settings.py
+from typing import Literal
+from pydantic import Field, SecretStr
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+class CoreSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=(".env", ".env.local"), extra="ignore",
+                                      env_nested_delimiter="__", secrets_dir="/run/secrets")
+    env: Literal["local", "dev", "staging", "prod"] = "local"
+    release: str = "0.0.0"
+    log_level: str = "INFO"
+    database_url: SecretStr                      # required: startup fails if missing
+    redis_url: str = "redis://localhost:6379/0"
+    otel_endpoint: str | None = None
+
+    @property
+    def is_prod(self) -> bool:
+        return self.env == "prod"
+
+# acme_core/flags.py
+import hashlib, json, time
+
+class Flags:
+    """Rules live in Redis as JSON: {"on": true, "percent": 10, "allow": ["u_1", "tenant_acme"]}"""
+    def __init__(self, redis, ttl: float = 10.0) -> None:
+        self.redis, self.ttl, self._cache = redis, ttl, {}
+
+    def _rule(self, name: str) -> dict | None:
+        hit = self._cache.get(name)
+        if hit and hit[0] > time.monotonic():
+            return hit[1]
+        raw = self.redis.get("flags:" + name)
+        rule = json.loads(raw) if raw else None
+        self._cache[name] = (time.monotonic() + self.ttl, rule)
+        return rule
+
+    def enabled(self, name: str, subject: str = "", default: bool = False) -> bool:
+        rule = self._rule(name)
+        if rule is None:
+            return default
+        if not rule.get("on", True):
+            return False                                   # kill switch wins
+        if subject in rule.get("allow", []):
+            return True
+        bucket = int(hashlib.sha256(f"{name}:{subject}".encode()).hexdigest()[:8], 16) % 100
+        return bucket < rule.get("percent", 0)
+
+# ---- a team's service ----
+class Settings(CoreSettings):
+    payment_provider_url: str
+    max_cart_items: int = Field(50, ge=1, le=500)
+
+settings = Settings()        # reads env vars, .env, /run/secrets; raises ValidationError if incomplete
+
+def checkout(cart, user, flags: Flags):
+    if flags.enabled("new-checkout", subject=user.tenant_id):
+        return new_checkout(cart)
+    return legacy_checkout(cart)
+`,
+"The rule that configuration must come from the environment was written down in the Twelve-Factor App (Heroku, 2011). Pydantic's BaseSettings has existed since Pydantic 1 and was moved into the separate pydantic-settings package with Pydantic 2 in 2023. Feature flags as a release tool were popularised by Flickr's 2009 blog post on continuous deployment and by Martin Fowler's 2017 article on feature toggles.",
+[["pydantic-settings documentation", "https://docs.pydantic.dev/latest/concepts/pydantic_settings/"],
+ ["The Twelve-Factor App: config", "https://12factor.net/config"],
+ ["OpenFeature: evaluation API", "https://openfeature.dev/docs/reference/concepts/evaluation-api/"]]),
+
+X("Reusable decorators and context managers",
+["Retrying a flaky call, giving up after a timeout, caching a result, wrapping work in a database transaction, writing an audit record, limiting the rate of a function: every service needs these, and every team writes them slightly wrong. A hand-written retry without backoff turns a small outage into a self-made denial of service. A retry that wraps a non-idempotent write charges a customer twice. A cache with no key convention collides with another team's keys in the same Redis.",
+ "The core package ships these as decorators and context managers with safe defaults: retry(times, on, base) with exponential backoff and jitter, timeout(seconds), cached(ttl, key), transactional(), audit(action) and rate_limited(key, per_second). Each one works on both sync and async functions by checking inspect.iscoroutinefunction and returning the matching wrapper, and each uses functools.wraps so that the name, docstring, type hints and signature of the original function survive. That last point matters: FastAPI builds its dependency injection from inspect.signature, and a decorator without wraps breaks every decorated endpoint.",
+ "Stacking order is part of the standard and is documented with examples. Decorators apply from the bottom up, so the one written closest to the function runs innermost. The company rule is: timed or traced outermost, then retry, then timeout, then transactional, so that each attempt gets its own timeout and its own transaction. Teams customise through arguments (which exceptions to retry, how many times) and never copy the implementation. A change in the backoff formula or in the metrics emitted by retry is one release of core and reaches every service."],
+["Decorators apply bottom-up and run top-down: the decorator nearest the def is the innermost at call time.",
+ "Always use functools.wraps. It copies __name__, __doc__, __module__ and sets __wrapped__, which inspect.signature follows.",
+ "A sync wrapper around an async function returns a coroutine without awaiting it, so its try/except never fires. Detect coroutine functions and provide an async wrapper.",
+ "Retry only on exceptions you know are safe (timeouts, connection errors, 503) and only around idempotent work.",
+ "Exponential backoff with jitter; a fixed delay makes all clients retry at the same moment.",
+ "Company stacking rule: traced, then retry, then timeout, then transactional. Each attempt gets a fresh timeout and a fresh transaction.",
+ "Context managers via contextlib.contextmanager: the exception arrives at the yield; re-raise it unless you really mean to swallow it."],
+"A logistics company had six implementations of retry across its Python services, two of them without any delay between attempts. When a partner API went down for 90 seconds, those two services sent 400,000 requests and got the company's IP blocked for a day. The platform team shipped acme_core.decorators.retry with jitter and a maximum of three attempts, and added a lint rule that flags any local function named retry.",
+`
+# acme_core/decorators.py
+import asyncio, functools, inspect, logging, random, time
+from contextlib import contextmanager
+
+log = logging.getLogger("acme.decorators")
+
+def retry(times: int = 3, on: tuple[type[BaseException], ...] = (TimeoutError, ConnectionError), base: float = 0.2):
+    """Retry on the given exceptions with exponential backoff and jitter. Sync and async."""
+    def decorator(fn):
+        def delay_for(attempt: int) -> float:
+            return min(base * 2 ** attempt, 5.0) + random.uniform(0, base)
+
+        if inspect.iscoroutinefunction(fn):
+            @functools.wraps(fn)
+            async def async_wrapper(*args, **kwargs):
+                for attempt in range(1, times + 1):
+                    try:
+                        return await fn(*args, **kwargs)
+                    except on as exc:
+                        if attempt == times:
+                            raise
+                        log.warning("retry", extra={"fn": fn.__qualname__, "attempt": attempt, "error": repr(exc)})
+                        await asyncio.sleep(delay_for(attempt))
+            return async_wrapper
+
+        @functools.wraps(fn)
+        def wrapper(*args, **kwargs):
+            for attempt in range(1, times + 1):
+                try:
+                    return fn(*args, **kwargs)
+                except on as exc:
+                    if attempt == times:
+                        raise
+                    log.warning("retry", extra={"fn": fn.__qualname__, "attempt": attempt, "error": repr(exc)})
+                    time.sleep(delay_for(attempt))
+        return wrapper
+    return decorator
+
+@contextmanager
+def audit(action: str, actor: str, **fields):
+    """Writes one audit log line whether the block succeeds or fails."""
+    start = time.perf_counter()
+    try:
+        yield
+        log.info("audit", extra={"action": action, "actor": actor, "ok": True, **fields,
+                                 "ms": round((time.perf_counter() - start) * 1000, 1)})
+    except Exception as exc:
+        log.info("audit", extra={"action": action, "actor": actor, "ok": False, "error": repr(exc), **fields})
+        raise
+
+# ---- a team's service (timed and timeout also come from acme_core.decorators) ----
+import httpx
+from acme_core.decorators import retry, timed, timeout, audit
+
+@timed("payments.charge")                                  # outermost: measures all attempts together
+@retry(times=3, on=(httpx.TransportError, TimeoutError))   # retries the whole attempt below
+@timeout(seconds=2.0)                                      # innermost: each attempt gets 2 seconds
+async def charge(client: httpx.AsyncClient, card_token: str, amount_cents: int) -> str:
+    r = await client.post("/charges", json={"card": card_token, "amount": amount_cents})
+    r.raise_for_status()
+    return r.json()["charge_id"]
+
+def refund(order, actor):
+    with audit("order.refund", actor=actor, order_id=order.id):
+        payments.refund(order)
+`,
+"Decorator syntax was added to Python in version 2.4 (2004, PEP 318) and the with statement with context managers in Python 2.5 (2006, PEP 343). functools.wraps appeared in Python 2.5 and the __wrapped__ attribute that inspect.signature follows was added in Python 3.2. Exponential backoff with jitter was described in detail by AWS in 2015.",
+[["Python: functools (wraps, lru_cache)", "https://docs.python.org/3/library/functools.html"],
+ ["Python: contextlib", "https://docs.python.org/3/library/contextlib.html"],
+ ["Tenacity: a general retrying library", "https://tenacity.readthedocs.io/en/latest/"]]),
 ]});
